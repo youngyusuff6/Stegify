@@ -1,0 +1,131 @@
+@import "tailwindcss";
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #0a0a0f;
+  color: #e2e8f0;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #0a0a0f; }
+::-webkit-scrollbar-thumb { background: #00ff9f44; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #00ff9f88; }
+
+@keyframes glow-pulse {
+  0%, 100% { text-shadow: 0 0 20px currentColor; }
+  50% { text-shadow: 0 0 40px currentColor, 0 0 60px currentColor; }
+}
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes slide-in-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes progress-stripes {
+  0% { background-position: 0 0; }
+  100% { background-position: 40px 0; }
+}
+@keyframes flicker {
+  0%, 95%, 100% { opacity: 1; }
+  96% { opacity: 0.8; }
+  98% { opacity: 0.6; }
+}
+@keyframes scan {
+  0% { top: -2px; }
+  100% { top: 100%; }
+}
+
+.glow-green { color: #00ff9f; text-shadow: 0 0 20px #00ff9f80, 0 0 40px #00ff9f40; }
+.glow-blue { color: #00d4ff; text-shadow: 0 0 20px #00d4ff80; }
+.glow-purple { color: #9d4edd; text-shadow: 0 0 20px #9d4edd80; }
+
+.gradient-text {
+  background: linear-gradient(135deg, #00ff9f, #00d4ff, #9d4edd);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.shimmer-text {
+  background: linear-gradient(90deg, #00ff9f, #00d4ff, #9d4edd, #00ff9f);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 4s linear infinite;
+}
+
+.cyber-grid {
+  background-image:
+    linear-gradient(rgba(0,255,159,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,255,159,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.panel-glass {
+  background: rgba(13,13,26,0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0,255,159,0.15);
+  border-radius: 12px;
+}
+
+.drop-zone-hover {
+  border-color: #00ff9f !important;
+  background: rgba(0,255,159,0.05) !important;
+  box-shadow: 0 0 20px rgba(0,255,159,0.2) !important;
+}
+
+.progress-stripes {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255,255,255,0.1),
+    rgba(255,255,255,0.1) 10px,
+    transparent 10px,
+    transparent 20px
+  );
+  background-size: 40px 40px;
+  animation: progress-stripes 0.6s linear infinite;
+}
+
+.float-anim { animation: float 3s ease-in-out infinite; }
+.flicker-anim { animation: flicker 5s infinite; }
+.slide-up { animation: slide-in-up 0.4s ease forwards; }
+.glow-pulse { animation: glow-pulse 2s ease-in-out infinite; }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: #1a1a3e;
+  border-radius: 2px;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: #00ff9f;
+  cursor: pointer;
+  box-shadow: 0 0 8px #00ff9f80;
+}

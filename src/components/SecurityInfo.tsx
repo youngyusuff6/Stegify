@@ -37,7 +37,7 @@ const features = [
 
 export default function SecurityInfo() {
   return (
-    <section className="max-w-4xl mx-auto px-4 py-16 space-y-10">
+    <section className="w-full max-w-4xl mx-auto px-4 py-16 space-y-10">
       <div className="text-center space-y-2">
         <div className="inline-flex items-center gap-2 text-[#00ff9f] text-xs tracking-widest mb-2">
           <Shield size={12} />

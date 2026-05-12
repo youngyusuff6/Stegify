@@ -2,13 +2,13 @@ import { Lock, Eye, EyeOff, Zap } from 'lucide-react';
 
 export default function Hero() {
   return (
-    <section className="relative pt-32 pb-20 px-4 text-center overflow-hidden cyber-grid">
+    <section className="relative w-full px-4 pt-24 pb-20 text-center overflow-hidden cyber-grid sm:pt-28 lg:pt-32">
       {/* Animated background blobs */}
       <div className="absolute top-20 left-1/4 w-72 h-72 bg-[#00ff9f08] rounded-full blur-3xl pointer-events-none" />
       <div className="absolute top-40 right-1/4 w-56 h-56 bg-[#9d4edd08] rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 left-1/2 w-96 h-32 bg-[#00d4ff06] rounded-full blur-3xl pointer-events-none -translate-x-1/2" />
 
-      <div className="relative max-w-4xl mx-auto">
+      <div className="relative w-full max-w-4xl mx-auto">
         {/* Badge */}
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[#00ff9f30] bg-[#00ff9f08] text-[#00ff9f] text-xs mb-6 tracking-widest">
           <Zap size={10} />

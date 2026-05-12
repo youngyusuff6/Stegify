@@ -40,7 +40,7 @@ export default function FAQ() {
   const [open, setOpen] = useState<number | null>(null);
 
   return (
-    <section id="faq" className="max-w-2xl mx-auto px-4 py-10 space-y-6">
+    <section id="faq" className="w-full max-w-2xl mx-auto px-4 py-10 scroll-mt-24 space-y-6">
       <div className="text-center space-y-2">
         <div className="inline-flex items-center gap-2 text-[#00ff9f] text-xs tracking-widest mb-2">
           <HelpCircle size={12} />

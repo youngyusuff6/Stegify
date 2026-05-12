@@ -84,7 +84,7 @@ export default function DecodePanel({ addToast }: DecodePanelProps) {
   };
 
   return (
-    <section id="decode" className="max-w-2xl mx-auto px-4 space-y-6">
+    <section id="decode" className="w-full max-w-2xl mx-auto px-4 scroll-mt-24 space-y-6">
       {/* Header */}
       <div className="text-center space-y-1">
         <div className="inline-flex items-center gap-2 text-[#00d4ff] text-xs tracking-widest mb-2">

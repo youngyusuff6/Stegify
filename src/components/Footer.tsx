@@ -1,4 +1,4 @@
-import { Shield, GitBranch, ExternalLink } from 'lucide-react';
+import { Shield, GitBranch } from 'lucide-react';
 
 const GITHUB_URL = 'https://github.com/youngyusuff6/Stegify';
 

@@ -25,7 +25,7 @@ export default function App() {
     <div className="min-h-screen bg-[#0a0a0f] cyber-grid">
       <Navbar />
 
-      <main className="flex w-full flex-col items-center gap-20 overflow-hidden pt-16 pb-16">
+      <main className="flex w-full flex-col items-center gap-20 overflow-hidden pb-16">
         <Hero />
         <EncodePanel addToast={addToast} />
         <Divider />

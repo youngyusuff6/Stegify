@@ -2,13 +2,13 @@ import { Lock, Eye, EyeOff, Zap } from 'lucide-react';
 
 export default function Hero() {
   return (
-    <section className="relative w-full px-4 pt-24 pb-20 text-center overflow-hidden cyber-grid sm:pt-28 lg:pt-32">
+    <section className="relative flex w-full justify-center px-4 pt-20 pb-20 text-center overflow-hidden cyber-grid sm:pt-24 lg:pt-28">
       {/* Animated background blobs */}
       <div className="absolute top-20 left-1/4 w-72 h-72 bg-[#00ff9f08] rounded-full blur-3xl pointer-events-none" />
       <div className="absolute top-40 right-1/4 w-56 h-56 bg-[#9d4edd08] rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 left-1/2 w-96 h-32 bg-[#00d4ff06] rounded-full blur-3xl pointer-events-none -translate-x-1/2" />
 
-      <div className="relative w-full max-w-4xl mx-auto">
+      <div className="relative mx-auto flex w-full max-w-4xl flex-col items-center text-center">
         {/* Badge */}
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[#00ff9f30] bg-[#00ff9f08] text-[#00ff9f] text-xs mb-6 tracking-widest">
           <Zap size={10} />
@@ -47,7 +47,7 @@ export default function Hero() {
         </div>
 
         {/* CTA buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+       <div className="flex flex-col sm:flex-row gap-4 justify-center my-6">
           <a
             href="#encode"
             className="px-8 py-3 rounded-lg bg-[#00ff9f] text-[#0a0a0f] font-bold text-sm tracking-wider hover:bg-[#00ff9fdd] transition-all hover:shadow-[0_0_20px_#00ff9f60] active:scale-95"

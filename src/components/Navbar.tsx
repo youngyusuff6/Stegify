@@ -2,7 +2,7 @@ import { Shield, GitBranch } from 'lucide-react';
 
 export default function Navbar() {
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[#00ff9f20] bg-[#0a0a0f]/90 backdrop-blur-md">
+    <nav className="sticky top-0 z-50 mb-6 border-b border-[#00ff9f20] bg-[#0a0a0f]/90 backdrop-blur-md">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Shield size={20} className="text-[#00ff9f]" />

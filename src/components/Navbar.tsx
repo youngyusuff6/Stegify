@@ -14,7 +14,7 @@ export default function Navbar() {
           <a href="#decode" className="hover:text-[#00ff9f] transition-colors hidden sm:block">DECODE</a>
           <a href="#faq" className="hover:text-[#00ff9f] transition-colors hidden sm:block">FAQ</a>
           <a
-            href="https://github.com/youngyusuff6/Stegify.git"
+            href="https://github.com/youngyusuff6/Stegify"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1 hover:text-[#00ff9f] transition-colors"

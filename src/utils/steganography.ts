@@ -1,32 +1,91 @@
-import { ProgressCallback, DecodeResult } from '../types';
+import type { ProgressCallback, DecodeResult } from '../types';
 import { encryptData, decryptData } from './crypto';
-import { fileToBase64, base64ToUint8Array, uint8ArrayToBase64, textToBase64, base64ToText } from './fileHelpers';
+import { fileToBase64, base64ToUint8Array, base64ToText, textToBase64 } from './fileHelpers';
 
 const DELIMITER = '<<<STEGIFY_END>>>';
-const BITS_PER_CHANNEL = 2; // use 2 LSBs per channel for balance of capacity vs quality
-const CHANNELS = 3; // R, G, B (skip alpha for compatibility)
-const BITS_PER_PIXEL = BITS_PER_CHANNEL * CHANNELS;
+// Use 2 LSBs per channel, 3 channels (R,G,B) per pixel → 6 bits/pixel = 0.75 bytes/pixel
+const BITS_PER_CHANNEL = 2;
+const CHANNELS_USED = 3; // R, G, B only (skip alpha)
 
 export function getImageCapacity(width: number, height: number): number {
-  const totalBits = width * height * BITS_PER_PIXEL;
-  return Math.floor(totalBits / 8) - 50; // subtract header overhead
+  const totalBits = width * height * BITS_PER_CHANNEL * CHANNELS_USED;
+  return Math.floor(totalBits / 8) - 64; // reserve margin for header/rounding
 }
 
-function loadImageData(file: File): Promise<{ ctx: OffscreenCanvasRenderingContext2D; canvas: OffscreenCanvas; width: number; height: number }> {
+function loadImage(file: File): Promise<{ canvas: OffscreenCanvas; ctx: OffscreenCanvasRenderingContext2D; width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
       const canvas = new OffscreenCanvas(img.width, img.height);
       const ctx = canvas.getContext('2d');
-      if (!ctx) { reject(new Error('Cannot get canvas context')); return; }
+      if (!ctx) { URL.revokeObjectURL(url); reject(new Error('Canvas context unavailable')); return; }
       ctx.drawImage(img, 0, 0);
       URL.revokeObjectURL(url);
-      resolve({ ctx, canvas, width: img.width, height: img.height });
+      resolve({ canvas, ctx, width: img.width, height: img.height });
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Failed to load image')); };
     img.src = url;
   });
+}
+
+/**
+ * Embed bytes into pixel data using 2-LSB per R/G/B channel.
+ * Layout: each byte is split into four 2-bit chunks written to consecutive channels.
+ * Channel order per pixel group: R0,G0,B0, R1,G1,B1, ...
+ * Bit packing within a byte (little-endian): bits[1:0], bits[3:2], bits[5:4], bits[7:6]
+ */
+function embedBytes(pixels: Uint8ClampedArray, bytes: Uint8Array, onProgress: ProgressCallback, progressStart: number, progressEnd: number) {
+  const mask = (1 << BITS_PER_CHANNEL) - 1; // 0b11
+  let channelPos = 0; // logical channel index (R=0,G=1,B=2 of pixel 0; R=3,G=4,... etc.)
+
+  for (let byteIdx = 0; byteIdx < bytes.length; byteIdx++) {
+    const b = bytes[byteIdx];
+    // Each byte needs 8/BITS_PER_CHANNEL = 4 channel slots
+    for (let shift = 0; shift < 8; shift += BITS_PER_CHANNEL) {
+      const chunkInPixel = channelPos % CHANNELS_USED; // 0=R,1=G,2=B
+      const pixelIdx = Math.floor(channelPos / CHANNELS_USED);
+      const arrayIdx = pixelIdx * 4 + chunkInPixel; // *4 because RGBA
+      if (arrayIdx >= pixels.length) return;
+
+      const bits = (b >> shift) & mask;
+      pixels[arrayIdx] = (pixels[arrayIdx] & ~mask) | bits;
+      channelPos++;
+    }
+
+    if (byteIdx % 8000 === 0 && bytes.length > 0) {
+      const pct = progressStart + ((byteIdx / bytes.length) * (progressEnd - progressStart));
+      onProgress(Math.round(pct), 'Embedding data…');
+    }
+  }
+}
+
+function extractBytes(pixels: Uint8ClampedArray, maxBytes: number, onProgress: ProgressCallback): Uint8Array {
+  const mask = (1 << BITS_PER_CHANNEL) - 1;
+  const result: number[] = [];
+  let channelPos = 0;
+
+  while (result.length < maxBytes) {
+    let b = 0;
+    for (let shift = 0; shift < 8; shift += BITS_PER_CHANNEL) {
+      const chunkInPixel = channelPos % CHANNELS_USED;
+      const pixelIdx = Math.floor(channelPos / CHANNELS_USED);
+      const arrayIdx = pixelIdx * 4 + chunkInPixel;
+      if (arrayIdx >= pixels.length) break;
+
+      const bits = pixels[arrayIdx] & mask;
+      b |= bits << shift;
+      channelPos++;
+    }
+    result.push(b & 0xff);
+
+    if (result.length % 10000 === 0) {
+      const pct = 40 + Math.round((result.length / maxBytes) * 45);
+      onProgress(Math.min(pct, 85), 'Extracting…');
+    }
+  }
+
+  return new Uint8Array(result);
 }
 
 function stringToBytes(str: string): Uint8Array {
@@ -45,7 +104,7 @@ export async function encodeIntoImage(
   onProgress: ProgressCallback
 ): Promise<Blob> {
   onProgress(5, 'Loading image…');
-  const { ctx, canvas, width, height } = await loadImageData(coverFile);
+  const { ctx, canvas, width, height } = await loadImage(coverFile);
 
   onProgress(15, 'Preparing payload…');
 
@@ -65,11 +124,7 @@ export async function encodeIntoImage(
     throw new Error('No secret content provided');
   }
 
-  const payload = JSON.stringify({
-    filename,
-    mimeType,
-    data: base64Data,
-  });
+  const payload = JSON.stringify({ filename, mimeType, data: base64Data });
 
   let finalPayload = payload;
   if (password) {
@@ -77,93 +132,24 @@ export async function encodeIntoImage(
     finalPayload = 'ENC:' + encryptData(payload, password);
   }
 
-  const messageWithDelimiter = finalPayload + DELIMITER;
-  const messageBytes = stringToBytes(messageWithDelimiter);
+  const messageBytes = stringToBytes(finalPayload + DELIMITER);
   const capacity = getImageCapacity(width, height);
 
   if (messageBytes.length > capacity) {
     throw new Error(
-      `Payload too large: ${messageBytes.length} bytes needed, but image only holds ${capacity} bytes. Use a larger cover image.`
+      `Payload too large: needs ${messageBytes.length.toLocaleString()} bytes, but image capacity is ${capacity.toLocaleString()} bytes. Use a larger cover image.`
     );
   }
 
   onProgress(35, 'Embedding data…');
   const imageData = ctx.getImageData(0, 0, width, height);
-  const pixels = imageData.data;
+  embedBytes(imageData.data, messageBytes, onProgress, 35, 92);
+  ctx.putImageData(imageData, 0, 0);
 
-  let byteIndex = 0;
-  let bitIndex = 0;
-  const totalBits = messageBytes.length * 8;
-  let pixelOffset = 0;
-
-  while (byteIndex < messageBytes.length) {
-    const byte = messageBytes[byteIndex];
-    const channelIndex = pixelOffset * 4 + Math.floor(bitIndex / BITS_PER_CHANNEL / CHANNELS) * 4;
-
-    for (let ch = 0; ch < CHANNELS && byteIndex < messageBytes.length; ch++) {
-      const pixIdx = (Math.floor((byteIndex * 8 + bitIndex) / BITS_PER_PIXEL) * 4) + ch;
-      if (pixIdx >= pixels.length) break;
-
-      const bitsToWrite = Math.min(BITS_PER_CHANNEL, 8 - (byteIndex * 8 + bitIndex) % 8);
-      let val = pixels[pixIdx];
-      const mask = (1 << bitsToWrite) - 1;
-      val = (val & ~mask) | ((byte >> bitIndex) & mask);
-      pixels[pixIdx] = val;
-      bitIndex += bitsToWrite;
-
-      if (bitIndex >= 8) {
-        bitIndex -= 8;
-        byteIndex++;
-        if (byteIndex < messageBytes.length && byteIndex % Math.floor(messageBytes.length / 10) === 0) {
-          const pct = 35 + Math.floor((byteIndex / messageBytes.length) * 55);
-          onProgress(pct, 'Embedding data…');
-        }
-      }
-    }
-    pixelOffset++;
-    if (pixelOffset > width * height) break;
-  }
-
-  // Simpler, correct embedding: pack bits sequentially
-  // Reset and redo with a correct algorithm
-  const imageData2 = ctx.getImageData(0, 0, width, height);
-  const pixels2 = imageData2.data;
-
-  embedBytes(pixels2, messageBytes, onProgress);
-
-  ctx.putImageData(imageData2, 0, 0);
   onProgress(95, 'Finalizing PNG…');
   const blob = await canvas.convertToBlob({ type: 'image/png' });
   onProgress(100, 'Done!');
   return blob;
-}
-
-function embedBytes(pixels: Uint8ClampedArray, bytes: Uint8Array, onProgress: ProgressCallback) {
-  // Each channel stores BITS_PER_CHANNEL bits. We skip the alpha channel.
-  // Channel order per pixel: R(0), G(1), B(2) — indices 0,1,2 within each pixel's 4 bytes.
-  let bitPos = 0; // global bit position in message
-
-  for (let byteIdx = 0; byteIdx < bytes.length; byteIdx++) {
-    const b = bytes[byteIdx];
-    for (let bit = 0; bit < 8; bit += BITS_PER_CHANNEL) {
-      const channelPos = Math.floor(bitPos / BITS_PER_CHANNEL);
-      const pixelIdx = Math.floor(channelPos / CHANNELS);
-      const channelInPixel = channelPos % CHANNELS;
-      const arrayIdx = pixelIdx * 4 + channelInPixel;
-
-      if (arrayIdx >= pixels.length) return;
-
-      const mask = (1 << BITS_PER_CHANNEL) - 1;
-      const bits = (b >> bit) & mask;
-      pixels[arrayIdx] = (pixels[arrayIdx] & ~mask) | bits;
-      bitPos += BITS_PER_CHANNEL;
-    }
-
-    if (byteIdx % 5000 === 0 && bytes.length > 0) {
-      const pct = 35 + Math.floor((byteIdx / bytes.length) * 60);
-      onProgress(pct, 'Embedding data…');
-    }
-  }
 }
 
 export async function decodeFromImage(
@@ -172,73 +158,48 @@ export async function decodeFromImage(
   onProgress: ProgressCallback
 ): Promise<DecodeResult> {
   onProgress(5, 'Loading image…');
-  const { ctx, width, height } = await loadImageData(encodedFile);
+  const { ctx, width, height } = await loadImage(encodedFile);
 
-  onProgress(20, 'Reading pixel data…');
+  onProgress(25, 'Reading pixel data…');
   const imageData = ctx.getImageData(0, 0, width, height);
-  const pixels = imageData.data;
 
-  onProgress(35, 'Extracting hidden bits…');
+  onProgress(40, 'Extracting hidden bits…');
+  const capacity = getImageCapacity(width, height) + stringToBytes(DELIMITER).length + 128;
+  const rawBytes = extractBytes(imageData.data, capacity, onProgress);
 
+  onProgress(88, 'Scanning for delimiter…');
   const delimBytes = stringToBytes(DELIMITER);
-  const extractedBytes: number[] = [];
-  let bitPos = 0;
-  let currentByte = 0;
-  let bitInByte = 0;
-  let found = false;
 
-  const maxBytes = getImageCapacity(width, height) + delimBytes.length + 200;
-
-  outer: while (true) {
-    const channelPos = Math.floor(bitPos / BITS_PER_CHANNEL);
-    const pixelIdx = Math.floor(channelPos / CHANNELS);
-    const channelInPixel = channelPos % CHANNELS;
-    const arrayIdx = pixelIdx * 4 + channelInPixel;
-
-    if (arrayIdx >= pixels.length || extractedBytes.length > maxBytes) break;
-
-    const mask = (1 << BITS_PER_CHANNEL) - 1;
-    const bits = pixels[arrayIdx] & mask;
-    currentByte |= bits << bitInByte;
-    bitInByte += BITS_PER_CHANNEL;
-    bitPos += BITS_PER_CHANNEL;
-
-    if (bitInByte >= 8) {
-      extractedBytes.push(currentByte & 0xff);
-      currentByte = 0;
-      bitInByte = 0;
-
-      // Check for delimiter at tail
-      if (extractedBytes.length >= delimBytes.length) {
-        const tail = extractedBytes.slice(-delimBytes.length);
-        if (tail.every((v, i) => v === delimBytes[i])) {
-          found = true;
-          break outer;
-        }
-      }
-
-      if (extractedBytes.length % 10000 === 0) {
-        const pct = 35 + Math.floor((extractedBytes.length / maxBytes) * 50);
-        onProgress(Math.min(pct, 85), 'Extracting…');
-      }
+  // Find delimiter position
+  let delimIdx = -1;
+  outer: for (let i = 0; i <= rawBytes.length - delimBytes.length; i++) {
+    for (let j = 0; j < delimBytes.length; j++) {
+      if (rawBytes[i + j] !== delimBytes[j]) continue outer;
     }
+    delimIdx = i;
+    break;
   }
 
-  if (!found) throw new Error('No hidden data found in this image, or it was not encoded with STEGIFY.');
+  if (delimIdx === -1) {
+    throw new Error('No hidden data found in this image. It may not have been encoded with STEGIFY.');
+  }
 
-  onProgress(88, 'Parsing payload…');
-
-  // Strip delimiter
-  const payloadBytes = new Uint8Array(extractedBytes.slice(0, extractedBytes.length - delimBytes.length));
-  let payloadStr = bytesToString(payloadBytes);
+  let payloadStr = bytesToString(rawBytes.slice(0, delimIdx));
 
   if (payloadStr.startsWith('ENC:')) {
-    if (!password) throw new Error('This image is password-protected. Please provide the password.');
+    if (!password) throw new Error('This image is password-protected. Please enter the passphrase.');
     onProgress(92, 'Decrypting…');
     payloadStr = decryptData(payloadStr.slice(4), password);
   }
 
-  const parsed = JSON.parse(payloadStr);
+  onProgress(96, 'Parsing metadata…');
+  let parsed: { filename: string; mimeType: string; data: string };
+  try {
+    parsed = JSON.parse(payloadStr);
+  } catch {
+    throw new Error('Failed to parse payload — the image may be corrupted or the password is wrong.');
+  }
+
   const { filename, mimeType, data: base64Data } = parsed;
   const dataBytes = base64ToUint8Array(base64Data);
 
@@ -248,5 +209,11 @@ export async function decodeFromImage(
   }
 
   onProgress(100, 'Done!');
-  return { type: mimeType === 'text/plain' ? 'text' : 'file', filename, mimeType, data: dataBytes, text };
+  return {
+    type: mimeType === 'text/plain' ? 'text' : 'file',
+    filename,
+    mimeType,
+    data: dataBytes,
+    text,
+  };
 }
